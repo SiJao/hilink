@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard HISADA - Pesantren Daarul 'Uluum Lido</title>
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
+                    colors: { primary: '#2b6954', secondary: '#6b21a8' }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-[#f7f9fb] text-[#191c1e] font-sans antialiased">
+
+    <div class="flex h-screen overflow-hidden">
+        
+        <!-- SIDEBAR -->
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between transition-transform duration-300 ease-in-out -translate-x-full lg:translate-x-0 lg:static lg:inset-auto">
+            <div>
+                <!-- Brand / Logo DU Lido -->
+                <div class="flex items-center gap-3 px-6 py-5 border-b border-slate-800">
+                    <div class="w-10 h-10 rounded-xl bg-white/10 p-1 flex items-center justify-center shrink-0">
+                        <img src="https://assets-web-du.s3.ap-southeast-1.amazonaws.com/wp-content/uploads/2019/01/05054727/logodu.png" 
+                             alt="Logo DU Lido" class="w-full h-full object-contain">
+                    </div>
+                    <div class="overflow-hidden">
+                        <h1 class="font-bold text-white tracking-wide leading-none">HISADA</h1>
+                        <p class="text-[11px] text-slate-400 mt-1 truncate">Daarul 'Uluum Lido</p>
+                    </div>
+                </div>
+
+                <!-- NAVIGATION MENU (Pilihan Modul) -->
+                <nav class="p-4 space-y-1.5">
+                    <button onclick="switchModule('dashboard')" id="nav-dashboard" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary text-white font-medium shadow-sm transition">
+                        <span class="material-symbols-outlined">dashboard</span>
+                        <span>Dashboard</span>
+                    </button>
+                    
+                    <button onclick="switchModule('kalender')" id="nav-kalender" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 transition">
+                        <span class="material-symbols-outlined">calendar_month</span>
+                        <span>Kalender Akademik</span>
+                    </button>
+
+                    <button onclick="alert('Modul Absensi sedang disiapkan!')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 transition">
+                        <span class="material-symbols-outlined">fact_check</span>
+                        <span>Absensi Harian</span>
+                    </button>
+                    
+                    <button onclick="alert('Modul Poskestren sedang disiapkan!')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 transition">
+                        <span class="material-symbols-outlined">medical_services</span>
+                        <span>Poskestren</span>
+                    </button>
+
+                    <button onclick="alert('Modul Mahkamah sedang disiapkan!')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 transition">
+                        <span class="material-symbols-outlined">gavel</span>
+                        <span>Mahkamah Santri</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- USER PROFILE (Jao Hong Khai) -->
+            <div class="p-4 border-t border-slate-800 m-4 rounded-2xl bg-slate-800/60 flex items-center gap-3 border border-slate-700/50">
+                <img src="https://ik.imagekit.io/dulidobogor/image/upload/h_512,q_auto:good//7266/a6de9b806cb817ac8c4391b7896d9719.JPG" 
+                     alt="Foto Jao Hong Khai" 
+                     onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=Jao+Hong+Khai&background=2b6954&color=fff';"
+                     class="w-11 h-11 rounded-full object-cover border-2 border-primary shrink-0 shadow-sm">
+                <div class="overflow-hidden">
+                    <p class="font-bold text-white text-sm truncate">Jao Hong Khai</p>
+                    <p class="text-xs text-emerald-400 font-medium truncate">@daarululuumlido.com</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+            
+            <!-- TOP NAVBAR -->
+            <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 z-10">
+                <div class="flex items-center gap-4">
+                    <button id="menu-btn" class="lg:hidden text-slate-600 hover:text-slate-900 focus:outline-none">
+                        <span class="material-symbols-outlined text-2xl">menu</span>
+                    </button>
+                    <h2 id="page-title" class="text-lg font-bold text-slate-800">Dashboard Utama</h2>
+                </div>
+                <div class="flex items-center gap-3">
+                    <a href="index.html" class="p-2 text-slate-600 hover:bg-slate-100 rounded-full transition flex items-center justify-center" title="Logout">
+                        <span class="material-symbols-outlined">logout</span>
+                    </a>
+                </div>
+            </header>
+
+            <!-- SCROLLABLE CONTENT -->
+            <main class="flex-1 overflow-y-auto p-6 lg:p-8">
+                
+                <!-- ========================================== -->
+                <!-- MODUL 1: DASHBOARD UTAMA (DEFAULT SHOW)    -->
+                <!-- ========================================== -->
+                <div id="modul-dashboard" class="modul-content space-y-8">
+                    <!-- Banner -->
+                    <div class="bg-gradient-to-r from-emerald-800 to-primary rounded-2xl p-6 text-white shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h3 class="text-2xl font-bold">Ahlan wa Sahlan, Ustadz! ðŸ‘‹</h3>
+                            <p class="text-emerald-100 text-sm mt-1">Ringkasan statistik & agenda kegiatan Pesantren Daarul 'Uluum Lido hari ini.</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <a href="https://drive.google.com" target="_blank" class="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3 py-2 rounded-xl backdrop-blur-md transition flex items-center gap-2 border border-white/20">
+                                <span class="material-symbols-outlined text-sm">folder_open</span>
+                                <span>Drive: Bagian Bahasa</span>
+                            </a>
+                            <a href="https://drive.google.com" target="_blank" class="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3 py-2 rounded-xl backdrop-blur-md transition flex items-center gap-2 border border-white/20">
+                                <span class="material-symbols-outlined text-sm">info</span>
+                                <span>Drive: Informasi</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Stat Cards Grid -->
+                    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Total Santri</span>
+                                <div class="p-2 bg-emerald-50 text-emerald-700 rounded-xl"><span class="material-symbols-outlined">groups</span></div>
+                            </div>
+                            <p class="text-3xl font-extrabold text-slate-800">1,248</p>
+                            <p class="text-xs text-slate-500 mt-1">Keseluruhan Putra & Putri</p>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Santri Putra (L)</span>
+                                <div class="p-2 bg-blue-50 text-blue-600 rounded-xl"><span class="material-symbols-outlined">man</span></div>
+                            </div>
+                            <p class="text-3xl font-extrabold text-slate-800">680</p>
+                            <p class="text-xs text-blue-600 font-medium mt-1">54.5% dari total santri</p>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Santri Putri (P)</span>
+                                <div class="p-2 bg-purple-50 text-purple-600 rounded-xl"><span class="material-symbols-outlined">woman</span></div>
+                            </div>
+                            <p class="text-3xl font-extrabold text-slate-800">568</p>
+                            <p class="text-xs text-purple-600 font-medium mt-1">45.5% dari total santri</p>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm border-l-4 border-l-amber-500">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Sakit Hari Ini</span>
+                                <div class="p-2 bg-amber-50 text-amber-600 rounded-xl"><span class="material-symbols-outlined">medical_services</span></div>
+                            </div>
+                            <p class="text-3xl font-extrabold text-slate-800">4 <span class="text-sm font-normal text-slate-500">santri</span></p>
+                            <p class="text-xs text-amber-600 font-medium mt-1">Dalam perawatan Poskestren</p>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ========================================== -->
+                <!-- MODUL 2: KALENDER AKADEMIK (HIDDEN DEFAULT)-->
+                <!-- ========================================== -->
+                <div id="modul-kalender" class="modul-content hidden space-y-8">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-primary">calendar_month</span>
+                                <span>Kalender & Agenda Akademik</span>
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-1">Manajemen jadwal kegiatan, ujian, dan perizinan Pesantren Daarul 'Uluum Lido.</p>
+                        </div>
+                        <button onclick="toggleModalAgenda()" class="bg-primary hover:bg-emerald-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sm">add</span>
+                            <span>Tambah Agenda Baru</span>
+                        </button>
+                    </div>
+
+                    <!-- Kalender Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h4 class="font-bold text-slate-800 text-lg">Agustus 2026</h4>
+                                <div class="flex items-center gap-2">
+                                    <button class="px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600">Hari Ini</button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-400 uppercase tracking-wider mb-2">
+                                <div class="py-2 text-red-500">Ahad</div><div>Sen</div><div>Sel</div><div>Rab</div><div>Kam</div><div>Jum</div><div>Sab</div>
+                            </div>
+                            <div class="grid grid-cols-7 gap-1 text-sm">
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl bg-slate-50/50 text-slate-300">26</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl bg-slate-50/50 text-slate-300">27</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl bg-slate-50/50 text-slate-300">28</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl bg-slate-50/50 text-slate-300">29</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl bg-slate-50/50 text-slate-300">30</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl bg-slate-50/50 text-slate-300">31</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">1</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl text-red-500 font-semibold bg-red-50/30">2</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">3</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">4</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">5</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">6</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">7</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">8</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl text-red-500 font-semibold bg-red-50/30">9</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">10</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">11</div>
+                                <div class="h-16 p-1 border-2 border-primary rounded-xl bg-emerald-50/40 font-bold text-primary relative">
+                                    <span>12</span>
+                                    <span class="absolute bottom-1 left-1 right-1 bg-primary text-[9px] text-white px-1 rounded truncate">Hari Ini</span>
+                                </div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">13</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">14</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">15</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl text-red-500 font-semibold bg-red-50/30">16</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl overflow-hidden">
+                                    <span class="font-bold">17</span>
+                                    <div class="bg-purple-100 text-purple-700 text-[9px] font-semibold p-0.5 rounded truncate">HUT RI 81</div>
+                                </div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">18</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">19</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">20</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">21</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">22</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl text-red-500 font-semibold bg-red-50/30">23</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">24</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl overflow-hidden">
+                                    <span class="font-bold">25</span>
+                                    <div class="bg-blue-100 text-blue-700 text-[9px] font-semibold p-0.5 rounded truncate">Pulang Massal</div>
+                                </div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">26</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">27</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">28</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">29</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl text-red-500 font-semibold bg-red-50/30">30</div>
+                                <div class="h-16 p-1 border border-slate-100 rounded-xl">31</div>
+                            </div>
+                        </div>
+
+                        <!-- Sidebar Rincian -->
+                        <div class="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
+                            <h4 class="font-bold text-slate-800 text-sm mb-4 border-b border-slate-100 pb-3">Agenda Agustus 2026</h4>
+                            <div class="space-y-3">
+                                <div class="p-3 rounded-xl bg-slate-50 border-l-4 border-l-purple-500">
+                                    <p class="font-bold text-xs text-slate-800">Upacara HUT RI ke-81</p>
+                                    <p class="text-[11px] text-slate-500 mt-0.5">17 Agustus 2026 â€¢ 07:00 WIB</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-50 border-l-4 border-l-blue-500">
+                                    <p class="font-bold text-xs text-slate-800">Perizinan Pulang Massal</p>
+                                    <p class="text-[11px] text-slate-500 mt-0.5">25 - 28 Agustus 2026</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL DUMMY TAMBAH AGENDA -->
+    <div id="modal-agenda" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-xl space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-800 text-base">Tambah Agenda Baru</h3>
+                <button onclick="toggleModalAgenda()" class="text-slate-400 hover:text-slate-600">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <form onsubmit="simpanAgendaDummy(event)" class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Nama Agenda</label>
+                    <input type="text" required placeholder="Contoh: Rapat Asatidz" class="w-full p-2.5 rounded-xl border border-slate-200">
+                </div>
+                <button type="submit" class="w-full bg-primary text-white font-bold py-3 rounded-xl hover:bg-emerald-800 transition">
+                    Simpan Agenda
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT PEMUTAR MODUL (MODULE SWITCHER) -->
+    <script>
+        // Sidebar Toggle (Mobile)
+        const menuBtn = document.getElementById('menu-btn');
+        const sidebar = document.getElementById('sidebar');
+        menuBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('-translate-x-full');
+        });
+
+        // Function Pindah Modul tanpa Reload
+        function switchModule(moduleName) {
+            // Sembunyikan semua modul
+            const allModules = document.querySelectorAll('.modul-content');
+            allModules.forEach(mod => mod.classList.add('hidden'));
+
+            // Tampilkan modul tujuan
+            const targetModule = document.getElementById('modul-' + moduleName);
+            if (targetModule) {
+                targetModule.classList.remove('hidden');
+            }
+
+            // Update judul di header
+            const pageTitle = document.getElementById('page-title');
+            if (moduleName === 'dashboard') pageTitle.innerText = "Dashboard Utama";
+            if (moduleName === 'kalender') pageTitle.innerText = "Kalender Akademik";
+
+            // Update style tombol sidebar
+            const allNavBtns = document.querySelectorAll('.nav-btn');
+            allNavBtns.forEach(btn => {
+                btn.classList.remove('bg-primary', 'text-white', 'shadow-sm');
+                btn.classList.add('text-slate-300');
+            });
+
+            const activeBtn = document.getElementById('nav-' + moduleName);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-primary', 'text-white', 'shadow-sm');
+                activeBtn.classList.remove('text-slate-300');
+            }
+        }
+
+        // Modal Functions
+        function toggleModalAgenda() {
+            document.getElementById('modal-agenda').classList.toggle('hidden');
+        }
+
+        function simpanAgendaDummy(e) {
+            e.preventDefault();
+            alert('ðŸŽ‰ Sukses! Agenda baru berhasil disimulasikan ke Kalender Akademik.');
+            toggleModalAgenda();
+        }
+    </script>
+</body>
+</html>
