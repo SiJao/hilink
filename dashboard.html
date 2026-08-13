@@ -158,6 +158,31 @@
                             <p class="text-3xl font-extrabold text-slate-800">4 <span class="text-sm font-normal text-slate-500">santri</span></p>
                             <p class="text-xs text-amber-600 font-medium mt-1">Dalam perawatan Poskestren</p>
                         </div>
+                        <div class="bg-slate-900 text-white rounded-3xl p-6 border border-slate-800 shadow-xl space-y-4">
+    
+    <!-- HEADER GRAFIK -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <span class="material-symbols-outlined text-emerald-400">show_chart</span>
+                <span>Tren Absensi Santri Mingguan</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">Perbandingan data Santri Sakit, Pulang, dan Alpha (Minggu Ini)</p>
+        </div>
+        
+        <!-- INDIKATOR WARNA (LEGEND CUSTOM) -->
+        <div class="flex items-center gap-4 text-xs font-semibold bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/60 self-start sm:self-auto">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm shadow-amber-400/50"></span>Sakit</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></span>Pulang</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50"></span>Alpha</span>
+        </div>
+    </div>
+
+    <!-- CANVAS TEMPAT CHART DILIHAT -->
+    <div class="relative h-72 w-full pt-2">
+        <canvas id="rekapLineChart"></canvas>
+    </div>
+</div>
                     </section>
                 </div>
 
@@ -495,7 +520,68 @@
             toggleModalPoskestren();
         }
     </script>
-
+<script src="https://cdn.jsdelivr.net/npm/chart.js">
+// Inisialisasi Multi-Line Chart Absensi
+document.addEventListener("DOMContentLoaded", function () {
+    const ctx = document.getElementById('rekapLineChart');
+    if (ctx) {
+        new Chart(ctx.getContext('2d'), {
+            type: 'line', // TIPE GRAFIK GARIS (OPSI 2)
+            data: {
+                labels: ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'],
+                datasets: [
+                    {
+                        label: 'Sakit',
+                        data: [4, 6, 3, 5, 2, 4, 3], // Data Sakit
+                        borderColor: '#f59e0b',     // Amber / Kuning
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,               // Bikin garis melengkung halus (smooth)
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: 'Pulang',
+                        data: [8, 12, 15, 20, 45, 60, 25], // Data Pulang (Naik di weekend)
+                        borderColor: '#3b82f6',     // Biru
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: 'Alpha',
+                        data: [1, 0, 2, 1, 0, 3, 0], // Data Alpha
+                        borderColor: '#f43f5e',     // Merah Rose
+                        backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false } // Menggunakan legend HTML buatan sendiri di atas
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#94a3b8', font: { family: 'Plus Jakarta Sans', size: 11 } }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: '#94a3b8', font: { family: 'Plus Jakarta Sans', size: 11 } }
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
 </body>
-</html>
 </html>
