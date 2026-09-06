@@ -1,19 +1,23 @@
 -- =====================================================================
 --  HISADA — SISTEM INFORMASI MANAJEMEN TERPADU
 --  Pondok Pesantren Daarul 'Uluum Lido
---  Skema database final (3NF) — versi rapi, mengatasi celah dari
---  rancangan sebelumnya: riwayat kamar/kelas, role bergilir (time-bound),
---  kategori pelanggaran terpisah dari tingkat hukuman, korespondensi,
---  kalender, shortcut, dan audit log.
+--  Skema database v2 — perubahan dari v1:
+--   1) Direktori GURU/ASATIDZ dipisah dari tabel `users` (tidak semua guru
+--      punya akun login sistem). classes.teacher_id & rooms.supervisor_id
+--      sekarang menunjuk ke `teachers`, bukan `users`.
+--   2) `attendances` punya `session_type` (kamar pagi/malam, KBM, kegiatan)
+--      supaya absensi tidak cuma satu jenis per hari.
+--   3) `violations` punya `punishment_given` + tabel katalog `punishments`
+--      untuk hukuman terstandar yang bisa dicentang Hakim.
 -- =====================================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS
     audit_logs, push_subscriptions, shortcuts, calendar_events,
     correspondence, achievements, leave_permits, violations,
-    violation_categories, medical_records, attendances,
+    punishments, violation_categories, medical_records, attendances,
     riwayat_kamar, riwayat_kelas, students, families, rooms, classes,
-    role_assignments, roles, users;
+    teachers, role_assignments, roles, users;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ---------------------------------------------------------------------
@@ -28,6 +32,7 @@ CREATE TABLE users (
     name        VARCHAR(150) NOT NULL,
     photo       VARCHAR(255) NULL,
     family_id   INT NULL                      COMMENT 'Diisi jika akun ini adalah Wali Santri',
+    teacher_id  INT NULL                      COMMENT 'Diisi jika akun ini milik seorang guru/asatidz yang juga login',
     is_active   BOOLEAN DEFAULT TRUE,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -38,9 +43,6 @@ CREATE TABLE roles (
         'admin, sekretaris, pengurus, wali_kelas, wali_kamar, hakim, dokter, asisten, wali_santri'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Jabatan bergilir: satu user bisa punya BEBERAPA role, masing-masing
--- dengan periode berlaku sendiri. Ini menggantikan kolom `role` ENUM
--- statis yang jadi celah di rancangan sebelumnya.
 CREATE TABLE role_assignments (
     id             INT AUTO_INCREMENT PRIMARY KEY,
     user_id        INT NOT NULL,
@@ -54,14 +56,37 @@ CREATE TABLE role_assignments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 2. MASTER DATA: KELAS, KAMAR, KELUARGA
+-- 2. DIREKTORI GURU/ASATIDZ/PELATIH (terpisah dari akun login)
+-- ---------------------------------------------------------------------
+CREATE TABLE teachers (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    code        VARCHAR(30) UNIQUE NULL COMMENT 'NIP/kode internal, opsional',
+    name        VARCHAR(150) NOT NULL,
+    gender      ENUM('L','P') NOT NULL,
+    phone       VARCHAR(20) NULL,
+    email       VARCHAR(150) NULL,
+    position    VARCHAR(100) NULL COMMENT 'Contoh: Wali Kelas, Pelatih Pramuka, Guru Tahsin',
+    subject     VARCHAR(100) NULL COMMENT 'Mata pelajaran/bidang ampu',
+    photo       VARCHAR(255) NULL,
+    join_date   DATE NULL,
+    status      ENUM('aktif','nonaktif') DEFAULT 'aktif',
+    user_id     INT NULL COMMENT 'Diisi jika guru ini juga punya akun login sistem',
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE users
+    ADD CONSTRAINT fk_users_teacher FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE SET NULL;
+
+-- ---------------------------------------------------------------------
+-- 3. MASTER DATA: KELAS, KAMAR, KELUARGA
 -- ---------------------------------------------------------------------
 CREATE TABLE classes (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     name       VARCHAR(50) NOT NULL COMMENT 'Contoh: 1 A SMP, 5 A MIA',
     level      VARCHAR(20) NULL COMMENT 'SMP, MTs, SMA, MA, TMI',
-    teacher_id INT NULL COMMENT 'Wali Kelas',
-    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
+    teacher_id INT NULL COMMENT 'Wali Kelas (menunjuk ke teachers, bukan users)',
+    FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE rooms (
@@ -69,8 +94,8 @@ CREATE TABLE rooms (
     name          VARCHAR(100) NOT NULL COMMENT 'Contoh: Ibnu Rusyd-01',
     building      VARCHAR(50)  NOT NULL,
     gender        ENUM('L','P') NOT NULL,
-    supervisor_id INT NULL COMMENT 'Wali Kamar',
-    FOREIGN KEY (supervisor_id) REFERENCES users(id) ON DELETE SET NULL
+    supervisor_id INT NULL COMMENT 'Wali Kamar (menunjuk ke teachers, bukan users)',
+    FOREIGN KEY (supervisor_id) REFERENCES teachers(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE families (
@@ -88,7 +113,7 @@ ALTER TABLE users
     ADD CONSTRAINT fk_users_family FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE SET NULL;
 
 -- ---------------------------------------------------------------------
--- 3. SANTRI (Data Induk) + RIWAYAT (celah yang diperbaiki)
+-- 4. SANTRI (Data Induk) + RIWAYAT
 -- ---------------------------------------------------------------------
 CREATE TABLE students (
     id          INT AUTO_INCREMENT PRIMARY KEY,
@@ -111,11 +136,6 @@ CREATE TABLE students (
     INDEX idx_student_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Riwayat perpindahan kamar & kelas per tahun ajaran/semester.
--- students.class_id / room_id di atas TETAP dipertahankan sebagai
--- "posisi terkini" untuk mempercepat query harian (absensi, direktori);
--- setiap kali posisi berubah, baris baru ditambahkan di sini oleh aplikasi
--- sehingga histori lama TIDAK tertimpa.
 CREATE TABLE riwayat_kelas (
     id            INT AUTO_INCREMENT PRIMARY KEY,
     student_id    INT NOT NULL,
@@ -139,25 +159,26 @@ CREATE TABLE riwayat_kamar (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 4. ABSENSI
+-- 5. ABSENSI — sekarang punya beberapa sesi per hari
 -- ---------------------------------------------------------------------
 CREATE TABLE attendances (
-    id         INT AUTO_INCREMENT PRIMARY KEY,
-    student_id INT NOT NULL,
-    date       DATE NOT NULL,
-    status     ENUM('hadir','sakit','izin','pulang','alpha') NOT NULL DEFAULT 'hadir',
-    notes      VARCHAR(255) NULL,
-    created_by INT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    student_id   INT NOT NULL,
+    date         DATE NOT NULL,
+    session_type ENUM('kamar_pagi','kamar_malam','kbm','kegiatan') NOT NULL DEFAULT 'kamar_malam',
+    status       ENUM('hadir','sakit','izin','pulang','alpha') NOT NULL DEFAULT 'hadir',
+    notes        VARCHAR(255) NULL,
+    created_by   INT NOT NULL,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id),
-    UNIQUE KEY unique_student_date (student_id, date),
+    UNIQUE KEY unique_student_date_session (student_id, date, session_type),
     INDEX idx_attendance_date (date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 5. POSKESTREN
+-- 6. POSKESTREN
 -- ---------------------------------------------------------------------
 CREATE TABLE medical_records (
     id                    INT AUTO_INCREMENT PRIMARY KEY,
@@ -176,11 +197,17 @@ CREATE TABLE medical_records (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 6. MAHKAMAH — kategori bidang dipisah dari tingkat hukuman
+-- 7. MAHKAMAH — kategori, katalog hukuman terstandar, & pemutihan
 -- ---------------------------------------------------------------------
 CREATE TABLE violation_categories (
     id   INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL COMMENT 'Keamanan, Peribadatan, Kebersihan, Bahasa, dll'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE punishments (
+    id    INT AUTO_INCREMENT PRIMARY KEY,
+    label VARCHAR(150) NOT NULL,
+    severity_hint ENUM('ringan','sedang','berat') NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE violations (
@@ -189,6 +216,7 @@ CREATE TABLE violations (
     category_id        INT NOT NULL,
     description        TEXT NOT NULL,
     severity           ENUM('ringan','sedang','berat') NULL COMMENT 'Diisi Hakim saat vonis',
+    punishment_given   TEXT NULL COMMENT 'Gabungan hukuman tercentang dari katalog + teks manual Hakim',
     verdict            ENUM('proses','divonis','pemutihan') DEFAULT 'proses',
     revocation_reason  TEXT NULL COMMENT 'Wajib diisi jika verdict = pemutihan',
     recorded_by        INT NOT NULL COMMENT 'Sekretaris (brute input)',
@@ -203,7 +231,7 @@ CREATE TABLE violations (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 7. PERIZINAN
+-- 8. PERIZINAN
 -- ---------------------------------------------------------------------
 CREATE TABLE leave_permits (
     id                  INT AUTO_INCREMENT PRIMARY KEY,
@@ -221,7 +249,7 @@ CREATE TABLE leave_permits (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 8. PRESTASI
+-- 9. PRESTASI
 -- ---------------------------------------------------------------------
 CREATE TABLE achievements (
     id            INT AUTO_INCREMENT PRIMARY KEY,
@@ -239,18 +267,18 @@ CREATE TABLE achievements (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 9. KORESPONDENSI (belum ada DDL di rancangan sebelumnya)
+-- 10. KORESPONDENSI
 -- ---------------------------------------------------------------------
 CREATE TABLE correspondence (
     id             INT AUTO_INCREMENT PRIMARY KEY,
     direction      ENUM('masuk','keluar') NOT NULL,
-    code           VARCHAR(60) NOT NULL COMMENT 'Auto-generate jika keluar, manual jika masuk',
+    code           VARCHAR(60) NOT NULL,
     from_position  VARCHAR(100) NOT NULL,
     letter_type    VARCHAR(60) NOT NULL,
     destination    VARCHAR(150) NOT NULL,
-    status         VARCHAR(30) NOT NULL DEFAULT 'draft' COMMENT 'draft/dikirim/selesai/diarsipkan/belum_dibaca/diteruskan/disetujui',
-    attachment_url VARCHAR(255) NULL COMMENT 'Wajib pola https://docs.google.com/document/...',
-    disposisi      VARCHAR(150) NULL COMMENT 'Khusus surat masuk',
+    status         VARCHAR(30) NOT NULL DEFAULT 'draft',
+    attachment_url VARCHAR(255) NULL,
+    disposisi      VARCHAR(150) NULL,
     created_by     INT NOT NULL,
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY unique_code (code),
@@ -258,7 +286,7 @@ CREATE TABLE correspondence (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 10. KALENDER (belum ada DDL di rancangan sebelumnya)
+-- 11. KALENDER
 -- ---------------------------------------------------------------------
 CREATE TABLE calendar_events (
     id          INT AUTO_INCREMENT PRIMARY KEY,
@@ -274,7 +302,7 @@ CREATE TABLE calendar_events (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 11. SHORTCUT DRIVE PER ROLE (belum ada DDL di rancangan sebelumnya)
+-- 12. SHORTCUT DRIVE PER ROLE
 -- ---------------------------------------------------------------------
 CREATE TABLE shortcuts (
     id        INT AUTO_INCREMENT PRIMARY KEY,
@@ -284,7 +312,7 @@ CREATE TABLE shortcuts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 12. NOTIFIKASI WEB PUSH
+-- 13. NOTIFIKASI WEB PUSH
 -- ---------------------------------------------------------------------
 CREATE TABLE push_subscriptions (
     id          INT AUTO_INCREMENT PRIMARY KEY,
@@ -298,7 +326,7 @@ CREATE TABLE push_subscriptions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------------------------------------------------
--- 13. AUDIT LOG GLOBAL (non-keuangan: mahkamah, absensi, poskestren, dll)
+-- 14. AUDIT LOG GLOBAL
 -- ---------------------------------------------------------------------
 CREATE TABLE audit_logs (
     id           INT AUTO_INCREMENT PRIMARY KEY,
@@ -314,16 +342,13 @@ CREATE TABLE audit_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =====================================================================
---  SEED DATA — untuk demo/uji coba
---  Password demo semua akun di bawah: hisada123
+--  SEED DATA — untuk demo/uji coba. Password semua akun: hisada123
 -- =====================================================================
 
 INSERT INTO roles (name) VALUES
 ('admin'),('sekretaris'),('pengurus'),('wali_kelas'),('wali_kamar'),
 ('hakim'),('dokter'),('asisten'),('wali_santri');
 
--- Password hash bcrypt untuk "hisada123" (dibuat via crypt.CRYPT_BLOWFISH,
--- format $2b$ — kompatibel penuh dengan password_verify() di PHP)
 SET @demo_hash = '$2b$12$Lao9JZSZA4HlPL3JlFD7AeUEg/jtCqQFCMRedUHikVQqXaxWgaMgW';
 
 INSERT INTO users (id, email, phone, password, name) VALUES
@@ -346,13 +371,22 @@ INSERT INTO role_assignments (user_id, role_id, mulai_berlaku) VALUES
 (6, (SELECT id FROM roles WHERE name='asisten'), '2026-07-01'),
 (7, (SELECT id FROM roles WHERE name='wali_santri'), '2026-07-01');
 
+INSERT INTO teachers (id, code, name, gender, phone, email, position, subject, join_date, user_id) VALUES
+(1, 'G-001', 'Ust. M. Faisal Suhaemi', 'L', '081211112222', 'ustadz.faisal@daarululuumlido.com', 'Wali Kelas & Wali Kamar', 'Bahasa Arab', '2020-07-01', 3),
+(2, 'G-002', 'Ust. Hakim Mahkamah', 'L', '081233334444', 'ustadz.hakim@daarululuumlido.com', 'Hakim Mahkamah Santri', 'Fiqih', '2019-07-01', 4),
+(3, 'G-003', 'Ust. Zainal Abidin', 'L', '081255556666', NULL, 'Pelatih Pramuka', 'Kepramukaan', '2021-07-01', NULL),
+(4, 'G-004', 'Ustzh. Fatimah Azzahra', 'P', '081277778888', NULL, 'Guru Tahsin', 'Tahsin Al-Quran', '2022-07-01', NULL);
+
+UPDATE users SET teacher_id = 1 WHERE id = 3;
+UPDATE users SET teacher_id = 2 WHERE id = 4;
+
 INSERT INTO classes (id, name, level, teacher_id) VALUES
-(1, '1 A MTs', 'MTs', 3),
-(2, '5 A MIA', 'MA', 3);
+(1, '1 A MTs', 'MTs', 1),
+(2, '5 A MIA', 'MA', 1);
 
 INSERT INTO rooms (id, name, building, gender, supervisor_id) VALUES
-(1, 'Ibnu Rusyd-01', 'Ibnu Rusyd', 'L', 3),
-(2, 'Hj. Sa''diyah-11', 'Hj. Sa''diyah', 'P', 3);
+(1, 'Ibnu Rusyd-01', 'Ibnu Rusyd', 'L', 1),
+(2, 'Hj. Sadiyah-11', 'Hj. Sadiyah', 'P', 1);
 
 INSERT INTO families (id, father_name, father_phone, mother_name) VALUES
 (1, 'Bapak Abdullah', '081234567890', 'Ibu Aminah');
@@ -367,12 +401,20 @@ INSERT INTO riwayat_kelas (student_id, class_id, tahun_ajaran, semester) VALUES
 INSERT INTO riwayat_kamar (student_id, room_id, tahun_ajaran, semester) VALUES
 (1, 1, '2026/2027', 1), (2, 2, '2026/2027', 1);
 
-INSERT INTO attendances (student_id, date, status, created_by) VALUES
-(1, CURDATE(), 'hadir', 2),
-(2, CURDATE(), 'sakit', 2);
+INSERT INTO attendances (student_id, date, session_type, status, created_by) VALUES
+(1, CURDATE(), 'kamar_pagi', 'hadir', 2),
+(2, CURDATE(), 'kamar_pagi', 'sakit', 2);
 
 INSERT INTO violation_categories (name) VALUES
 ('Keamanan'), ('Peribadatan'), ('Kebersihan'), ('Bahasa');
+
+INSERT INTO punishments (label, severity_hint) VALUES
+('Menghafal 1 halaman Al-Quran', 'ringan'),
+('Membersihkan area umum', 'ringan'),
+('Push up / lari lapangan', 'sedang'),
+('Membuat surat pernyataan', 'sedang'),
+('Pemanggilan wali santri', 'berat'),
+('Skorsing sementara', 'berat');
 
 INSERT INTO medical_records (student_id, complaint, status, handled_by_assistant) VALUES
 (2, 'Demam tinggi sejak semalam', 'rawat_inap', 6);
