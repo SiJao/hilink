@@ -1,0 +1,249 @@
+<?php
+/**
+ * HISADA — Poskestren (halaman khusus Dokter & Asisten Poskestren)
+ * Satu file utuh: PHP + HTML + CSS + JS. Role lain yang mencoba membuka
+ * file ini akan dialihkan balik ke dashboard.php.
+ */
+const DB_HOST = 'localhost';
+const DB_NAME = 'cpnpmuy3608_hisada_database';
+const DB_USER = 'cpnpmuy3608_hisada';
+const DB_PASS = 'Dulido1996';
+
+mysqli_report(MYSQLI_REPORT_OFF);
+session_start();
+
+if (empty($_SESSION['uid'])) { header('Location: index.php'); exit; }
+
+$ROLES = $_SESSION['roles'] ?? [];
+if (count(array_intersect(['admin','dokter','asisten'], $ROLES)) === 0) {
+    header('Location: dashboard.php');
+    exit;
+}
+
+$mysqli = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+if ($mysqli->connect_errno) { die('Tidak bisa terhubung ke database (' . $mysqli->connect_error . ').'); }
+$mysqli->set_charset('utf8mb4');
+
+function h(?string $v): string { return htmlspecialchars($v ?? '', ENT_QUOTES, 'UTF-8'); }
+function safePrepare(mysqli $mysqli, string $sql): mysqli_stmt {
+    $stmt = $mysqli->prepare($sql);
+    if (!$stmt) { die('Query gagal disiapkan: ' . h($mysqli->error)); }
+    return $stmt;
+}
+function hasRole(array $needed, array $userRoles): bool { return count(array_intersect($needed, $userRoles)) > 0; }
+
+$UID = (int) $_SESSION['uid'];
+$NAME = $_SESSION['name'];
+
+$flash = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    try {
+        switch ($_POST['action']) {
+            case 'add_medical':
+                if (!hasRole(['admin','asisten'], $ROLES)) throw new Exception('Tidak berhak.');
+                $studentId = (int) $_POST['student_id'];
+                $complaint = trim($_POST['complaint'] ?? '');
+                if ($studentId <= 0 || $complaint === '') throw new Exception('Santri dan keluhan wajib diisi.');
+                $stmt = safePrepare($mysqli, 'INSERT INTO medical_records (student_id, complaint, status, handled_by_assistant) VALUES (?, ?, "rawat_jalan", ?)');
+                $stmt->bind_param('isi', $studentId, $complaint, $UID);
+                $stmt->execute(); $stmt->close();
+                $flash = 'Kasus baru diteruskan ke Dokter.';
+                break;
+            case 'update_medical_doctor':
+                if (!hasRole(['admin','dokter'], $ROLES)) throw new Exception('Tidak berhak.');
+                $recordId = (int) $_POST['record_id'];
+                $diagnosis = trim($_POST['diagnosis'] ?? '');
+                $prescription = trim($_POST['prescription'] ?? '');
+                $status = $_POST['status'] ?? 'rawat_jalan';
+                if ($diagnosis === '' || $prescription === '') throw new Exception('Diagnosa dan resep wajib diisi.');
+                $stmt = safePrepare($mysqli, 'UPDATE medical_records SET diagnosis=?, prescription=?, status=?, handled_by_doctor=? WHERE id=?');
+                $stmt->bind_param('sssii', $diagnosis, $prescription, $status, $UID, $recordId);
+                $stmt->execute(); $stmt->close();
+                if ($status === 'rawat_inap') {
+                    $ss = safePrepare($mysqli, 'SELECT student_id FROM medical_records WHERE id=?');
+                    $ss->bind_param('i', $recordId); $ss->execute();
+                    $sid = $ss->get_result()->fetch_assoc()['student_id'] ?? null; $ss->close();
+                    if ($sid) {
+                        $today = date('Y-m-d');
+                        $as = safePrepare($mysqli, 'INSERT INTO attendances (student_id, date, session_type, status, created_by) VALUES (?, ?, "kamar_pagi", "sakit", ?) ON DUPLICATE KEY UPDATE status="sakit", updated_at=NOW()');
+                        $as->bind_param('isi', $sid, $today, $UID); $as->execute(); $as->close();
+                    }
+                }
+                $flash = 'Rekam medis diperbarui.';
+                break;
+            case 'checkout_medical':
+                $recordId = (int) $_POST['record_id'];
+                $stmt = safePrepare($mysqli, 'UPDATE medical_records SET status="sembuh" WHERE id=?');
+                $stmt->bind_param('i', $recordId); $stmt->execute(); $stmt->close();
+                $flash = 'Pasien ditandai sembuh (check-out).';
+                break;
+            case 'logout':
+                session_destroy(); header('Location: index.php'); exit;
+            default:
+                throw new Exception('Aksi tidak dikenal.');
+        }
+    } catch (Exception $e) {
+        $flash = 'GAGAL: ' . $e->getMessage();
+    }
+    header('Location: poskestren.php?msg=' . urlencode($flash ?? ''));
+    exit;
+}
+if (isset($_GET['msg']) && $_GET['msg'] !== '') { $flash = $_GET['msg']; }
+
+$activePatients = $mysqli->query("SELECT m.*, s.name student_name, s.nis FROM medical_records m JOIN students s ON s.id = m.student_id WHERE m.status IN ('rawat_inap','rujuk') ORDER BY m.created_at DESC")->fetch_all(MYSQLI_ASSOC);
+$needsDoctor = $mysqli->query("SELECT m.*, s.name student_name, s.nis FROM medical_records m JOIN students s ON s.id = m.student_id WHERE m.handled_by_doctor IS NULL ORDER BY m.created_at ASC")->fetch_all(MYSQLI_ASSOC);
+$activeStudents = $mysqli->query("SELECT id, name, nis FROM students WHERE status='aktif' ORDER BY name")->fetch_all(MYSQLI_ASSOC);
+$studentPickerJson = json_encode($activeStudents, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE);
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poskestren — HISADA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+    :root{ --ink:#16241c; --emerald-900:#0b3d2e; --emerald-700:#166247; --gold:#c9a13b; --gold-soft:#e6cf8f; --cream:#f7f4ec; --paper:#fff; --line:#e3ddc9; --muted:#6b7a70; --red:#b3432b; --amber:#a9791f; }
+    *{box-sizing:border-box;} body{margin:0;font-family:'Inter',sans-serif;color:var(--ink);background:var(--cream);}
+    .topbar{ background:var(--emerald-900); color:#f4efe1; padding:18px 28px; display:flex; justify-content:space-between; align-items:center; }
+    .topbar .brand{display:flex; align-items:center; gap:10px;}
+    .topbar .seal{ width:34px;height:34px;border-radius:10px; background:rgba(244,239,225,.12); display:flex;align-items:center;justify-content:center; font-family:'Fraunces',serif; color:var(--gold-soft); font-weight:600; }
+    .topbar h1{font-family:'Fraunces',serif; font-size:16px; margin:0;}
+    .topbar span{font-size:11px; color:#cddbd2;}
+    .btn-logout{ background:none; border:1px solid rgba(244,239,225,.3); color:#f4efe1; padding:7px 14px; border-radius:8px; font-size:12.5px; cursor:pointer; }
+    .content{max-width:920px; margin:0 auto; padding:28px 20px 60px;}
+    .flash{ padding:12px 16px; border-radius:9px; margin-bottom:20px; font-size:13px; background:#e8f3ec; border:1px solid #bfdccb; color:var(--emerald-700); }
+    .flash.gagal{background:#fbeae5; border-color:#e6b7a8; color:var(--red);}
+    .panel{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:22px; margin-bottom:20px; }
+    .panel h2{font-family:'Fraunces',serif; font-size:16.5px; margin:0 0 16px;}
+    .field-group{margin-bottom:14px;} .field-group label{display:block; font-size:12px; font-weight:600; margin-bottom:5px;}
+    .form-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px;} @media (max-width:640px){.form-grid{grid-template-columns:1fr;}}
+    .field-input{width:100%; padding:9px 12px; border:1.4px solid var(--line); border-radius:9px; font-size:13px; font-family:inherit;}
+    .btn{display:inline-block; padding:9px 18px; border-radius:9px; border:none; background:var(--emerald-900); color:#f4efe1; font-size:13px; font-weight:600; cursor:pointer;}
+    .btn.small{padding:5px 12px; font-size:11.5px;} .btn.secondary{background:none; border:1px solid var(--line); color:var(--ink);}
+    details.form-toggle summary{ list-style:none; cursor:pointer; display:inline-flex; gap:8px; padding:9px 16px; border:1.4px dashed var(--emerald-700); border-radius:9px; color:var(--emerald-700); font-size:13px; font-weight:600; margin-bottom:16px;}
+    details.form-toggle summary::-webkit-details-marker{display:none;}
+    table.data{width:100%; border-collapse:collapse; font-size:13px;}
+    table.data th{text-align:left; font-size:11px; text-transform:uppercase; color:var(--muted); padding:8px 10px; border-bottom:1.4px solid var(--line);}
+    table.data td{padding:9px 10px; border-bottom:1px solid var(--line);}
+    .status-pill{font-size:10.5px; padding:2px 9px; border-radius:20px; font-weight:600;}
+    .status-pill.rawat_inap, .status-pill.rujuk{background:#fbeee0; color:var(--amber);}
+    .status-pill.rawat_jalan{background:#eef1ea; color:#5b6b60;}
+    .empty-state{padding:20px; text-align:center; color:var(--muted); font-size:13px;}
+    .searchable{position:relative;}
+    .searchable-results{ position:absolute; top:calc(100% + 4px); left:0; right:0; background:#fff; border:1px solid var(--line); border-radius:10px; max-height:220px; overflow-y:auto; z-index:30; display:none; box-shadow:0 8px 24px rgba(11,61,46,.12); }
+    .searchable-results.show{display:block;}
+    .searchable-results .opt{padding:9px 12px; font-size:13px; cursor:pointer;} .searchable-results .opt:hover{background:var(--cream);}
+    .searchable-results .opt small{display:block; color:var(--muted); font-size:11px;}
+</style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="brand"><div class="seal">DU</div><div><h1>Poskestren — HISADA</h1><span><?= h($NAME) ?> · <?= h(implode(', ', $ROLES)) ?></span></div></div>
+        <form method="POST"><input type="hidden" name="action" value="logout"><button class="btn-logout" type="submit">Keluar</button></form>
+    </div>
+    <div class="content">
+        <?php if ($flash): ?><div class="flash <?= str_starts_with($flash,'GAGAL') ? 'gagal' : '' ?>"><?= h($flash) ?></div><?php endif; ?>
+
+        <?php if (hasRole(['admin','asisten'], $ROLES)): ?>
+        <details class="form-toggle">
+            <summary>+ Input Pasien Baru</summary>
+            <div class="panel">
+                <form method="POST">
+                    <input type="hidden" name="action" value="add_medical">
+                    <div class="form-grid">
+                        <div class="field-group searchable">
+                            <label>Santri</label>
+                            <input type="text" class="field-input js-picker-text" placeholder="Ketik nama atau NIS…" autocomplete="off">
+                            <input type="hidden" name="student_id" class="js-picker-value" required>
+                            <div class="searchable-results"></div>
+                        </div>
+                        <div class="field-group"><label>Keluhan</label><input type="text" name="complaint" class="field-input" required></div>
+                    </div>
+                    <button class="btn" type="submit">Teruskan ke Dokter</button>
+                </form>
+            </div>
+        </details>
+        <?php endif; ?>
+
+        <?php if (hasRole(['admin','dokter'], $ROLES) && !empty($needsDoctor)): ?>
+        <div class="panel">
+            <h2>Menunggu Pemeriksaan Dokter</h2>
+            <?php foreach ($needsDoctor as $m): ?>
+                <form method="POST" style="border-bottom:1px solid var(--line); padding:14px 0;">
+                    <input type="hidden" name="action" value="update_medical_doctor">
+                    <input type="hidden" name="record_id" value="<?= $m['id'] ?>">
+                    <strong><?= h($m['student_name']) ?></strong> <span style="color:var(--muted); font-size:12px;">(NIS <?= h($m['nis']) ?>)</span>
+                    <p style="font-size:13px; margin:6px 0;">Keluhan: <?= h($m['complaint']) ?></p>
+                    <div class="form-grid">
+                        <div class="field-group"><label>Diagnosa</label><input type="text" name="diagnosis" class="field-input" required></div>
+                        <div class="field-group"><label>Resep</label><input type="text" name="prescription" class="field-input" required></div>
+                    </div>
+                    <div class="field-group"><label>Status Tindak Lanjut</label>
+                        <select name="status" class="field-input">
+                            <option value="rawat_jalan">Rawat Jalan</option><option value="rawat_inap">Rawat Inap</option>
+                            <option value="rujuk">Rujuk RS</option><option value="sembuh">Sembuh</option>
+                        </select>
+                    </div>
+                    <button class="btn small" type="submit">Simpan Diagnosa</button>
+                </form>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
+        <div class="panel">
+            <h2>Daftar Pasien Aktif</h2>
+            <?php if (empty($activePatients)): ?><p class="empty-state">Tidak ada pasien aktif saat ini.</p><?php else: ?>
+            <table class="data">
+                <thead><tr><th>Santri</th><th>Diagnosa</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                <?php foreach ($activePatients as $m): ?>
+                    <tr>
+                        <td><?= h($m['student_name']) ?><br><span style="color:var(--muted);font-size:11px;">NIS <?= h($m['nis']) ?></span></td>
+                        <td><?= h($m['diagnosis'] ?: '—') ?></td>
+                        <td><span class="status-pill <?= $m['status'] ?>"><?= ucfirst(str_replace('_',' ',$m['status'])) ?></span></td>
+                        <td>
+                            <form method="POST"><input type="hidden" name="action" value="checkout_medical"><input type="hidden" name="record_id" value="<?= $m['id'] ?>"><button class="btn small secondary" type="submit">Check-out</button></form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php endif; ?>
+        </div>
+    </div>
+
+<script>
+    const STUDENT_PICKER_DATA = <?= $studentPickerJson ?: '[]' ?>;
+    document.querySelectorAll('.searchable').forEach(function (wrap) {
+        const textInput = wrap.querySelector('.js-picker-text');
+        const hiddenInput = wrap.querySelector('.js-picker-value');
+        const resultsBox = wrap.querySelector('.searchable-results');
+        if (!textInput || !hiddenInput || !resultsBox) return;
+        function renderOptions(list) {
+            resultsBox.innerHTML = '';
+            if (list.length === 0) { resultsBox.innerHTML = '<div class="opt" style="color:var(--muted);">Tidak ditemukan</div>'; }
+            else {
+                list.slice(0, 20).forEach(function (s) {
+                    const opt = document.createElement('div');
+                    opt.className = 'opt';
+                    opt.innerHTML = s.name + '<small>NIS ' + s.nis + '</small>';
+                    opt.addEventListener('click', function () {
+                        hiddenInput.value = s.id; textInput.value = s.name + ' — ' + s.nis; resultsBox.classList.remove('show');
+                    });
+                    resultsBox.appendChild(opt);
+                });
+            }
+            resultsBox.classList.add('show');
+        }
+        textInput.addEventListener('input', function () {
+            hiddenInput.value = '';
+            const kw = textInput.value.trim().toLowerCase();
+            if (kw === '') { resultsBox.classList.remove('show'); return; }
+            renderOptions(STUDENT_PICKER_DATA.filter(s => s.name.toLowerCase().includes(kw) || s.nis.toLowerCase().includes(kw)));
+        });
+        document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) resultsBox.classList.remove('show'); });
+    });
+</script>
+</body>
+</html>
