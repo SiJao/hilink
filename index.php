@@ -14,9 +14,9 @@
 // KONFIGURASI DATABASE — GANTI SESUAI HOSTING
 // ------------------------------------------------------------------
 const DB_HOST = 'localhost';
-const DB_NAME = 'hisada_db';
-const DB_USER = 'root';
-const DB_PASS = '';
+const DB_NAME = 'cpnpmuy3608_hisada_database';
+const DB_USER = 'cpnpmuy3608_hisada';
+const DB_PASS = 'Dulido1996';
 
 // PHP 8.1+ membuat mysqli melempar exception secara default alih-alih
 // mengembalikan false pada error. Baris ini mengembalikan ke perilaku lama
@@ -104,7 +104,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['roles']     = $roles;
                     $_SESSION['family_id'] = $user['family_id'];
 
-                    header('Location: dashboard.php');
+                    // Semua role login lewat halaman yang sama, tapi diarahkan ke
+                    // file yang berbeda sesuai tugasnya. Role staf umum (admin,
+                    // sekretaris, pengurus, wali kelas/kamar) menang lebih dulu
+                    // karena mereka perlu akses dashboard penuh, bukan cuma satu modul.
+                    $target = 'dashboard.php';
+                    if (count(array_intersect(['admin','sekretaris','pengurus','wali_kelas','wali_kamar'], $roles)) > 0) {
+                        $target = 'dashboard.php';
+                    } elseif (in_array('hakim', $roles, true)) {
+                        $target = 'mahkamah.php';
+                    } elseif (count(array_intersect(['dokter','asisten'], $roles)) > 0) {
+                        $target = 'poskestren.php';
+                    } elseif (in_array('wali_santri', $roles, true)) {
+                        $target = 'portalwali.php';
+                    }
+
+                    header('Location: ' . $target);
                     $mysqli->close();
                     exit;
                 }
